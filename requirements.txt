@@ -1,0 +1,21 @@
+# Codex AI Screen Tutor - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Google Gemini AI SDK (vision-capable model)
+google-generativeai>=0.8.0
+
+# Screenshot capture
+pyautogui>=0.9.54
+
+# Image processing (required by pyautogui and Gemini SDK)
+Pillow>=10.0.0
+
+# Global hotkey listener
+keyboard>=0.13.5
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# tkinter is included in the Python standard library (no install needed)
+# On Ubuntu/Debian, if tkinter is missing, run:
+#   sudo apt-get install python3-tk
