@@ -1,7 +1,7 @@
 """
 Tkinter Overlay UI for Codex AI Screen Tutor.
 Displays AI responses in a semi-transparent overlay window.
-Includes a chat input for follow-up questions.
+Includes a Capture button and chat input for follow-up questions.
 """
 
 import tkinter as tk
@@ -14,8 +14,8 @@ class TutorOverlay:
     """A tkinter-based overlay window that displays AI tutor responses."""
 
     WINDOW_WIDTH = 520
-    WINDOW_HEIGHT = 600
-    WINDOW_ALPHA = 0.92
+    WINDOW_HEIGHT = 640
+    WINDOW_ALPHA = 0.95
     BG_COLOR = "#1e1e2e"
     HEADER_COLOR = "#313244"
     TEXT_COLOR = "#cdd6f4"
@@ -25,13 +25,14 @@ class TutorOverlay:
     INPUT_BG = "#313244"
     BUTTON_COLOR = "#89b4fa"
     BUTTON_TEXT_COLOR = "#1e1e2e"
+    CAPTURE_COLOR = "#a6e3a1"
 
-    def __init__(self):
+    def __init__(self, on_capture: Optional[Callable] = None):
         """Initialize the overlay window."""
         self._root = tk.Tk()
-        self._root.withdraw()
-        self._visible = False
+        self._visible = True
         self._on_followup_callback: Optional[Callable] = None
+        self._on_capture = on_capture
         self._setup_window()
         self._setup_widgets()
 
@@ -40,18 +41,29 @@ class TutorOverlay:
         root = self._root
         root.title("Codex AI Screen Tutor")
         root.configure(bg=self.BG_COLOR)
-        root.attributes("-alpha", self.WINDOW_ALPHA)
-        root.attributes("-topmost", True)
+        try:
+            root.attributes("-alpha", self.WINDOW_ALPHA)
+            root.attributes("-topmost", True)
+        except Exception:
+            pass
         root.resizable(True, True)
         root.minsize(400, 300)
 
-        screen_w = root.winfo_screenwidth()
-        screen_h = root.winfo_screenheight()
-        x = screen_w - self.WINDOW_WIDTH - 20
-        y = screen_h - self.WINDOW_HEIGHT - 60
-        root.geometry(f"{self.WINDOW_WIDTH}x{self.WINDOW_HEIGHT}+{x}+{y}")
+        try:
+            screen_w = root.winfo_screenwidth()
+            screen_h = root.winfo_screenheight()
+            x = max(0, screen_w - self.WINDOW_WIDTH - 20)
+            y = max(0, screen_h - self.WINDOW_HEIGHT - 60)
+            root.geometry(f"{self.WINDOW_WIDTH}x{self.WINDOW_HEIGHT}+{x}+{y}")
+        except Exception:
+            root.geometry(f"{self.WINDOW_WIDTH}x{self.WINDOW_HEIGHT}")
 
-        root.protocol("WM_DELETE_WINDOW", self.hide)
+        root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_close(self) -> None:
+        """Handle window close."""
+        self._visible = False
+        self._root.destroy()
 
     def _setup_widgets(self) -> None:
         """Create and layout all UI widgets."""
@@ -72,16 +84,46 @@ class TutorOverlay:
 
         self._status_label = tk.Label(
             header_frame,
-            text="Ready  |  Press Ctrl+Shift+S to capture",
+            text="Ready",
             font=("Segoe UI", 9),
             bg=self.HEADER_COLOR,
             fg="#6c7086",
         )
         self._status_label.pack(side=tk.RIGHT, padx=12)
 
+        # Capture button bar
+        capture_frame = tk.Frame(root, bg=self.BG_COLOR, pady=6)
+        capture_frame.pack(fill=tk.X, padx=10)
+
+        capture_btn = tk.Button(
+            capture_frame,
+            text="📸  Capture Screen & Analyze",
+            font=("Segoe UI", 11, "bold"),
+            bg=self.CAPTURE_COLOR,
+            fg=self.BUTTON_TEXT_COLOR,
+            relief=tk.FLAT,
+            padx=16,
+            pady=8,
+            cursor="hand2",
+            command=self._on_capture_click,
+        )
+        capture_btn.pack(fill=tk.X)
+
+        hotkey_label = tk.Label(
+            capture_frame,
+            text="Shortcut: Ctrl+Shift+S  (requires root on Linux)",
+            font=("Segoe UI", 8),
+            bg=self.BG_COLOR,
+            fg="#6c7086",
+        )
+        hotkey_label.pack(pady=(2, 0))
+
+        # Separator
+        ttk.Separator(root, orient="horizontal").pack(fill=tk.X, padx=10, pady=4)
+
         # Response text area
         text_frame = tk.Frame(root, bg=self.BG_COLOR)
-        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(8, 0))
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 0))
 
         self._response_text = scrolledtext.ScrolledText(
             text_frame,
@@ -98,21 +140,19 @@ class TutorOverlay:
         self._response_text.pack(fill=tk.BOTH, expand=True)
 
         # Separator
-        separator = ttk.Separator(root, orient="horizontal")
-        separator.pack(fill=tk.X, padx=10, pady=4)
+        ttk.Separator(root, orient="horizontal").pack(fill=tk.X, padx=10, pady=4)
 
         # Chat input area
         chat_frame = tk.Frame(root, bg=self.BG_COLOR, pady=4)
         chat_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
-        chat_label = tk.Label(
+        tk.Label(
             chat_frame,
             text="Follow-up question:",
             font=("Segoe UI", 9),
             bg=self.BG_COLOR,
             fg="#6c7086",
-        )
-        chat_label.pack(anchor=tk.W)
+        ).pack(anchor=tk.W)
 
         input_frame = tk.Frame(chat_frame, bg=self.BG_COLOR)
         input_frame.pack(fill=tk.X, pady=(2, 0))
@@ -131,7 +171,7 @@ class TutorOverlay:
         self._chat_input.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=6, padx=(0, 6))
         self._chat_input.bind("<Return>", self._on_send)
 
-        send_btn = tk.Button(
+        tk.Button(
             input_frame,
             text="Send",
             font=("Segoe UI", 10, "bold"),
@@ -142,8 +182,21 @@ class TutorOverlay:
             pady=6,
             cursor="hand2",
             command=self._on_send,
+        ).pack(side=tk.RIGHT)
+
+        # Initial message
+        self._set_response_text(
+            "Welcome to Codex AI Screen Tutor!\n\n"
+            "Click 'Capture Screen & Analyze' above to take a screenshot\n"
+            "and get instant AI tutoring on what's on your screen.\n\n"
+            "After a capture, use the chat box below for follow-up questions.",
+            color="#6c7086"
         )
-        send_btn.pack(side=tk.RIGHT)
+
+    def _on_capture_click(self) -> None:
+        """Handle capture button click."""
+        if self._on_capture:
+            threading.Thread(target=self._on_capture, daemon=True).start()
 
     def _on_send(self, event=None) -> None:
         """Handle send button click or Enter key in chat input."""
@@ -181,7 +234,6 @@ class TutorOverlay:
         else:
             self._response_text.insert(tk.END, text)
         self._response_text.config(state=tk.DISABLED)
-        self._response_text.see(tk.END)
 
     def _append_text(self, text: str, color: str = None) -> None:
         """Append text to the response area."""
@@ -200,25 +252,16 @@ class TutorOverlay:
         self._root.after(0, self._show_loading_main_thread)
 
     def _show_loading_main_thread(self) -> None:
-        """Internal: called on the main thread to show loading state."""
-        self._root.deiconify()
-        self._visible = True
         self._status_label.config(text="Analyzing screenshot...", fg=self.LOADING_COLOR)
         self._set_response_text("Analyzing your screen with Gemini AI...", color=self.LOADING_COLOR)
-        self._root.lift()
 
     def show_response(self, response_text: str, screenshot_path: str = None) -> None:
         """Display the AI response in the overlay."""
-        self._root.after(0, lambda: self._show_response_main_thread(response_text, screenshot_path))
+        self._root.after(0, lambda: self._show_response_main_thread(response_text))
 
-    def _show_response_main_thread(self, response_text: str, screenshot_path: str = None) -> None:
-        """Internal: called on the main thread to show the response."""
-        self._root.deiconify()
-        self._visible = True
-        self._status_label.config(text="Analysis complete", fg=self.ACCENT_COLOR)
+    def _show_response_main_thread(self, response_text: str) -> None:
+        self._status_label.config(text="Analysis complete ✓", fg=self.ACCENT_COLOR)
         self._set_response_text(response_text)
-        self._root.lift()
-
         try:
             from api_client import query_followup
             self._on_followup_callback = query_followup
@@ -230,12 +273,8 @@ class TutorOverlay:
         self._root.after(0, lambda: self._show_error_main_thread(error_message))
 
     def _show_error_main_thread(self, error_message: str) -> None:
-        """Internal: called on the main thread to show an error."""
-        self._root.deiconify()
-        self._visible = True
-        self._status_label.config(text="Error occurred", fg=self.ERROR_COLOR)
-        self._set_response_text(f"Error: {error_message}", color=self.ERROR_COLOR)
-        self._root.lift()
+        self._status_label.config(text="Error", fg=self.ERROR_COLOR)
+        self._set_response_text(f"❌ Error: {error_message}", color=self.ERROR_COLOR)
 
     def hide(self) -> None:
         """Hide the overlay window."""
@@ -243,9 +282,8 @@ class TutorOverlay:
         self._visible = False
 
     def is_visible(self) -> bool:
-        """Return whether the overlay is currently visible."""
         return self._visible
 
     def run(self) -> None:
-        """Start the tkinter event loop. Blocks until window is closed."""
+        """Start the tkinter event loop."""
         self._root.mainloop()
