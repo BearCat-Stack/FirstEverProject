@@ -1,83 +1,141 @@
 """
-Codex AI Screen Tutor - Main Application
-Listens for hotkey (ctrl+shift+s) to capture screen and query Gemini AI.
+Codex AI Screen Tutor - Main Entry Point
+Captures screen, sends to Gemini AI, displays response in overlay.
 """
 
-import threading
 import sys
-from dotenv import load_dotenv
+import threading
+import time
 
-from screen_capture import capture_screenshot
-from api_client import query_gemini
-from ui import TutorOverlay
+# Try pynput first (works on Windows without admin), then keyboard as fallback
+HOTKEY_AVAILABLE = False
+HOTKEY_LIB = None
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Try to import keyboard - requires root on Linux
 try:
-    import keyboard
-    KEYBOARD_AVAILABLE = True
+    from pynput import keyboard as pynput_keyboard
+    HOTKEY_AVAILABLE = True
+    HOTKEY_LIB = "pynput"
 except ImportError:
-    KEYBOARD_AVAILABLE = False
+    pass
 
-_overlay = None
-
-
-def trigger_capture():
-    """Capture screen and display AI response. Can be called from hotkey or UI button."""
-    global _overlay
-    if _overlay is None:
-        return
-    print("Capturing screen...")
+if not HOTKEY_AVAILABLE:
     try:
-        screenshot_path = capture_screenshot()
-        print(f"Screenshot saved to: {screenshot_path}")
-        _overlay.show_loading()
+        import keyboard
+        HOTKEY_AVAILABLE = True
+        HOTKEY_LIB = "keyboard"
+    except (ImportError, Exception):
+        pass
 
-        def query_and_display():
-            try:
-                response = query_gemini(screenshot_path)
-                _overlay.show_response(response, screenshot_path)
-            except Exception as e:
-                _overlay.show_error(str(e))
-
-        threading.Thread(target=query_and_display, daemon=True).start()
-
-    except Exception as e:
-        print(f"Error capturing screenshot: {e}")
-        _overlay.show_error(str(e))
+from screen_capture import capture_screen
+from api_client import GeminiClient
+from ui import TutorOverlay
 
 
 def main():
     """Main application entry point."""
-    global _overlay
+    print("Starting Codex AI Screen Tutor...")
 
-    print("Codex AI Screen Tutor started.")
-    print("Press Ctrl+C or close the window to exit.\n")
+    # Initialize Gemini client
+    client = GeminiClient()
 
-    # Create the overlay UI
-    _overlay = TutorOverlay(on_capture=trigger_capture)
+    # Shared state
+    is_processing = False
+    overlay = None
 
-    # Register global hotkey if keyboard library is available
-    if KEYBOARD_AVAILABLE:
+    def trigger_capture():
+        """Capture screen and display AI response."""
+        nonlocal is_processing
+        if is_processing:
+            print("Already processing, please wait...")
+            return
+        is_processing = True
+
+        def _do_capture():
+            nonlocal is_processing
+            try:
+                if overlay:
+                    overlay.set_status("Capturing...")
+                    overlay.update_response("Capturing screen...")
+
+                # Brief delay to allow overlay to hide if needed
+                time.sleep(0.3)
+
+                # Capture screen
+                image = capture_screen()
+
+                if overlay:
+                    overlay.set_status("Analyzing...")
+                    overlay.update_response("Sending to Gemini AI...")
+
+                # Get AI response
+                response = client.analyze_image(image)
+
+                if overlay:
+                    overlay.set_status("Ready")
+                    overlay.update_response(response)
+                    overlay.last_image = image
+
+            except Exception as e:
+                print(f"Error during capture: {e}")
+                if overlay:
+                    overlay.set_status("Error")
+                    overlay.update_response(f"Error: {e}")
+            finally:
+                is_processing = False
+
+        # Run capture in background thread
+        thread = threading.Thread(target=_do_capture, daemon=True)
+        thread.start()
+
+    # Create UI
+    overlay = TutorOverlay(on_capture=trigger_capture)
+
+    # Register global hotkey
+    if HOTKEY_LIB == "pynput":
+        try:
+            # pynput hotkey: ctrl+shift+s
+            hotkey_combo = {pynput_keyboard.Key.ctrl, pynput_keyboard.Key.shift, pynput_keyboard.KeyCode(char='s')}
+            current_keys = set()
+
+            def on_press(key):
+                current_keys.add(key)
+                # Check for ctrl+shift+s
+                if (pynput_keyboard.Key.ctrl_l in current_keys or pynput_keyboard.Key.ctrl_r in current_keys or pynput_keyboard.Key.ctrl in current_keys) and \
+                   (pynput_keyboard.Key.shift in current_keys or pynput_keyboard.Key.shift_l in current_keys or pynput_keyboard.Key.shift_r in current_keys) and \
+                   (pynput_keyboard.KeyCode(char='s') in current_keys or pynput_keyboard.KeyCode(char='S') in current_keys):
+                    trigger_capture()
+
+            def on_release(key):
+                current_keys.discard(key)
+
+            listener = pynput_keyboard.Listener(on_press=on_press, on_release=on_release)
+            listener.daemon = True
+            listener.start()
+            print("Global hotkey Ctrl+Shift+S registered (via pynput).")
+        except Exception as e:
+            print(f"Could not register hotkey via pynput: {e}")
+            print("Use the 'Capture' button in the overlay window instead.")
+
+    elif HOTKEY_LIB == "keyboard":
         try:
             keyboard.add_hotkey("ctrl+shift+s", trigger_capture)
-            print("Hotkey registered: Ctrl+Shift+S")
-            print("Press Ctrl+Shift+S to capture your screen and get AI tutoring.")
+            print("Global hotkey Ctrl+Shift+S registered (via keyboard).")
         except Exception as e:
             print(f"Could not register hotkey: {e}")
             print("Use the 'Capture' button in the overlay window instead.")
     else:
-        print("Note: Global hotkey unavailable (requires root on Linux).")
-        print("Use the 'Capture' button in the overlay window instead.")
+        print("No hotkey library available. Use the 'Capture' button in the overlay window.")
+
+    print("Codex AI Screen Tutor started.")
+    print("Press Ctrl+Shift+S anywhere or click the Capture button to analyze your screen.")
+    print("Press Ctrl+C or close the window to exit.")
 
     try:
-        _overlay.run()
+        overlay.run()
     except KeyboardInterrupt:
         print("\nExiting Codex AI Screen Tutor...")
     finally:
-        if KEYBOARD_AVAILABLE:
+        if HOTKEY_LIB == "keyboard":
             try:
                 keyboard.unhook_all()
             except Exception:

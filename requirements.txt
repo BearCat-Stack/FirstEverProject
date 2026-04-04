@@ -1,16 +1,14 @@
-# Codex AI Screen Tutor - Dependencies
-# Install with: pip install -r requirements.txt
-
-# Google Gemini AI SDK (vision-capable model)
+# Gemini AI SDK
 google-generativeai>=0.8.0
 
-# Screenshot capture
+# Screen capture
 pyautogui>=0.9.54
 
 # Image processing (required by pyautogui and Gemini SDK)
 Pillow>=10.0.0
 
-# Global hotkey listener
+# Global hotkey listener (pynput works without admin on Windows, keyboard as fallback)
+pynput>=1.7.0
 keyboard>=0.13.5
 
 # Environment variable management
