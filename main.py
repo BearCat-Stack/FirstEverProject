@@ -16,37 +16,37 @@ load_dotenv()
 
 
 def main():
-      """Main application entry point."""
-      print("Codex AI Screen Tutor started.")
-      print("Press Ctrl+Shift+S to capture your screen and get AI tutoring.")
-      print("Press Ctrl+C or close the window to exit.\n")
+    """Main application entry point."""
+    print("Codex AI Screen Tutor started.")
+    print("Press Ctrl+Shift+S to capture your screen and get AI tutoring.")
+    print("Press Ctrl+C or close the window to exit.\n")
 
     # Create the overlay UI (runs in its own thread via tkinter mainloop)
-      overlay = TutorOverlay()
+    overlay = TutorOverlay()
 
     def on_hotkey():
-              """Callback when the hotkey is pressed."""
-              print("Hotkey detected - capturing screen...")
-              try:
-                            # Capture screenshot
-                            screenshot_path = capture_screenshot()
-                            print(f"Screenshot saved to: {screenshot_path}")
+        """Callback when the hotkey is pressed."""
+        print("Hotkey detected - capturing screen...")
+        try:
+            # Capture screenshot
+            screenshot_path = capture_screenshot()
+            print(f"Screenshot saved to: {screenshot_path}")
 
-                  # Show loading state in the overlay
-                            overlay.show_loading()
+            # Show loading state in the overlay
+            overlay.show_loading()
 
-                  # Query Gemini in a background thread to avoid blocking the hotkey listener
-                            def query_and_display():
-                                              try:
-                                                                    response = query_gemini(screenshot_path)
-                                                                    overlay.show_response(response, screenshot_path)
-              except Exception as e:
-                                    overlay.show_error(str(e))
+            # Query Gemini in a background thread to avoid blocking the hotkey listener
+            def query_and_display():
+                try:
+                    response = query_gemini(screenshot_path)
+                    overlay.show_response(response, screenshot_path)
+                except Exception as e:
+                    overlay.show_error(str(e))
 
-                  thread = threading.Thread(target=query_and_display, daemon=True)
+            thread = threading.Thread(target=query_and_display, daemon=True)
             thread.start()
 
-except Exception as e:
+        except Exception as e:
             print(f"Error capturing screenshot: {e}")
             overlay.show_error(str(e))
 
@@ -55,14 +55,14 @@ except Exception as e:
     print("Hotkey registered: Ctrl+Shift+S")
 
     try:
-              # Start the tkinter main loop (blocks until window is closed)
-              overlay.run()
-except KeyboardInterrupt:
+        # Start the tkinter main loop (blocks until window is closed)
+        overlay.run()
+    except KeyboardInterrupt:
         print("\nExiting Codex AI Screen Tutor...")
-finally:
+    finally:
         keyboard.unhook_all()
         print("Goodbye!")
 
 
 if __name__ == "__main__":
-      main()
+    main()
