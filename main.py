@@ -3,7 +3,6 @@ Codex AI Screen Tutor - Main Entry Point
 Captures screen, sends to Gemini AI, displays response in overlay.
 """
 
-import sys
 import threading
 import time
 
@@ -26,7 +25,7 @@ if not HOTKEY_AVAILABLE:
     except (ImportError, Exception):
         pass
 
-from screen_capture import capture_screen
+from screen_capture import capture_screenshot
 from api_client import GeminiClient
 from ui import TutorOverlay
 
@@ -57,23 +56,22 @@ def main():
                     overlay.set_status("Capturing...")
                     overlay.update_response("Capturing screen...")
 
-                # Brief delay to allow overlay to hide if needed
+                # Brief delay to allow overlay to settle
                 time.sleep(0.3)
 
-                # Capture screen
-                image = capture_screen()
+                # Capture screen - returns filepath string
+                screenshot_path = capture_screenshot()
 
                 if overlay:
                     overlay.set_status("Analyzing...")
                     overlay.update_response("Sending to Gemini AI...")
 
-                # Get AI response
-                response = client.analyze_image(image)
+                # Get AI response - pass filepath to query_gemini
+                response = client.query_gemini(screenshot_path)
 
                 if overlay:
                     overlay.set_status("Ready")
                     overlay.update_response(response)
-                    overlay.last_image = image
 
             except Exception as e:
                 print(f"Error during capture: {e}")
@@ -93,13 +91,10 @@ def main():
     # Register global hotkey
     if HOTKEY_LIB == "pynput":
         try:
-            # pynput hotkey: ctrl+shift+s
-            hotkey_combo = {pynput_keyboard.Key.ctrl, pynput_keyboard.Key.shift, pynput_keyboard.KeyCode(char='s')}
             current_keys = set()
 
             def on_press(key):
                 current_keys.add(key)
-                # Check for ctrl+shift+s
                 if (pynput_keyboard.Key.ctrl_l in current_keys or pynput_keyboard.Key.ctrl_r in current_keys or pynput_keyboard.Key.ctrl in current_keys) and \
                    (pynput_keyboard.Key.shift in current_keys or pynput_keyboard.Key.shift_l in current_keys or pynput_keyboard.Key.shift_r in current_keys) and \
                    (pynput_keyboard.KeyCode(char='s') in current_keys or pynput_keyboard.KeyCode(char='S') in current_keys):
