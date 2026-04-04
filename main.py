@@ -26,16 +26,13 @@ if not HOTKEY_AVAILABLE:
         pass
 
 from screen_capture import capture_screenshot
-from api_client import GeminiClient
+from api_client import query_gemini, query_followup
 from ui import TutorOverlay
 
 
 def main():
     """Main application entry point."""
     print("Starting Codex AI Screen Tutor...")
-
-    # Initialize Gemini client
-    client = GeminiClient()
 
     # Shared state
     is_processing = False
@@ -56,7 +53,6 @@ def main():
                     overlay.set_status("Capturing...")
                     overlay.update_response("Capturing screen...")
 
-                # Brief delay to allow overlay to settle
                 time.sleep(0.3)
 
                 # Capture screen - returns filepath string
@@ -66,8 +62,8 @@ def main():
                     overlay.set_status("Analyzing...")
                     overlay.update_response("Sending to Gemini AI...")
 
-                # Get AI response - pass filepath to query_gemini
-                response = client.query_gemini(screenshot_path)
+                # Get AI response
+                response = query_gemini(screenshot_path)
 
                 if overlay:
                     overlay.set_status("Ready")
@@ -81,7 +77,6 @@ def main():
             finally:
                 is_processing = False
 
-        # Run capture in background thread
         thread = threading.Thread(target=_do_capture, daemon=True)
         thread.start()
 
